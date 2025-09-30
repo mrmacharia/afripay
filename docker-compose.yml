@@ -1,15 +1,63 @@
-version: '3'
-
+version: "3.8"
 services:
+  db:
+    image: postgres:15-alpine
+    container_name: afripay-db
+    environment:
+      POSTGRES_DB: afripay
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+      - ./db/seed.sql:/docker-entrypoint-initdb.d/02-seed.sql
   backend:
     build: ./backend
+    container_name: afripay-backend
+    depends_on:
+      - db
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@db:5432/afripay
+      JWT_SECRET: supersecretkey
+      S3_ENDPOINT: http://s3:9000
+      S3_ACCESS_KEY: afripay
+      S3_SECRET_KEY: afripay_secret
+      SENDGRID_API_KEY: your_sendgrid_key
+      TWILIO_ACCOUNT_SID: your_twilio_sid
+      TWILIO_AUTH_TOKEN: your_twilio_token
     ports:
-      - "3000:3000"
+      - "4000:4000"
+    volumes:
+      - ./backend:/app
   frontend:
     build: ./frontend
+    container_name: afripay-frontend
+    depends_on:
+      - backend
+    environment:
+      NEXT_PUBLIC_API_URL: http://backend:4000
     ports:
-      - "8080:80"
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
   edge:
     build: ./edge
+    container_name: afripay-edge
     ports:
-      - "5000:5000"
+      - "8000:8000"
+    volumes:
+      - ./edge:/app
+  s3:
+    image: minio/minio
+    container_name: afripay-s3
+    environment:
+      MINIO_ROOT_USER: afripay
+      MINIO_ROOT_PASSWORD: afripay_secret
+    command: server /data
+    ports:
+      - "9000:9000"
+    volumes:
+      - s3data:/data
+volumes:
+  s3data:
